@@ -1,0 +1,5 @@
+.direnv/
+.envrc
+.zig-cache/
+celeste2.p8
+zig-out/
