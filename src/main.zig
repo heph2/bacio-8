@@ -57,7 +57,7 @@ pub fn main() !void {
     defer _ = gba.deinit();
     const alloc = gba.allocator();
 
-    const filename = "test_gfx.p8";
+    const filename = "test.p8";
     const delimiter = "\n";
     var file = try std.fs.cwd().openFile(filename, .{ .mode = .read_only });
 
