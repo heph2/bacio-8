@@ -66,10 +66,12 @@ pub fn main() !void {
     var read_buf: [4096]u8 = undefined; // 4KB
     var in_lua = false;
     var in_gfx = false;
+    var in_gff = false;
     var in_sfx = false;
 
     var gfx_section: std.ArrayList([]const u8) = .empty;
     var lua_section: std.ArrayList(u8) = .empty;
+    var gff_section: std.ArrayList(u8) = .empty;
     var sfx_section: std.ArrayList([]const u8) = .empty;
 
     defer {
@@ -84,6 +86,7 @@ pub fn main() !void {
             alloc.free(row);
         }
         sfx_section.deinit(alloc);
+        gff_section.deinit(alloc);
     }
 
     // Reader section
@@ -116,9 +119,17 @@ pub fn main() !void {
             continue;
         }
 
+        if (std.mem.eql(u8, line.written(), "__gff__")) {
+            std.debug.print("Found gff section\n", .{});
+            in_gfx = false;
+            in_gff = true;
+            line.clearRetainingCapacity();
+            continue;
+        }
+
         if (std.mem.eql(u8, line.written(), "__sfx__")) {
             std.debug.print("Found sfx section\n", .{});
-            in_gfx = false;
+            in_gff = false;
             in_sfx = true;
             line.clearRetainingCapacity();
             continue;
@@ -132,6 +143,19 @@ pub fn main() !void {
         if (in_gfx) {
             const copy = try alloc.dupe(u8, line.written());
             try gfx_section.append(alloc, copy);
+        }
+
+        if (in_gff) {
+            const copy = try alloc.dupe(u8, line.written());
+
+            var i: usize = 0;
+            while (i + 1 < copy.len) : (i += 2) {
+                const pair = copy[i .. i + 2];
+                const value = try std.fmt.parseInt(u8, pair, 16);
+                try gff_section.append(alloc, value);
+            }
+
+            alloc.free(copy);
         }
 
         if (in_sfx) {
@@ -160,4 +184,24 @@ pub fn main() !void {
 
     // dump ppm from gfx section
     try dump_ppm(gfx_section.items);
+
+    // gff section
+    // each pair of hex value corrispond to the flags enabled for each sprite
+    // 00 -> 00000000 -> no flags enabled
+    // 01 -> 00000001 -> flag 0 enabled
+    // 02 -> 00000010 -> flag 1 enabled
+    // 03 -> 00000011 -> flag 0 + 1 enabled
+    //
+    for (gff_section.items) |value| {
+        std.debug.print("{b:0>8}  | ", .{value});
+
+        for (0..8) |bit| {
+            const b: u3 = @intCast(bit); // 3 bit fits 0-7 values
+            if (((value >> b) & 1) == 1) {
+                std.debug.print("{} ", .{bit});
+            }
+        }
+
+        std.debug.print("\n", .{});
+    }
 }
