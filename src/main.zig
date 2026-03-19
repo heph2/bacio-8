@@ -1,6 +1,78 @@
 const std = @import("std");
 const zlua = @import("zlua");
 
+// gonna use 16 bit instead of 20 because it's easier to handle
+// and also the pico-8 itself use 16 bit when memory map the SFX part
+const SfxNote = packed struct {
+    pitch: u8, // nybbles 0–1 (0–63)
+    waveform: u4, // nybble 2
+    volume: u3, // nybble 3
+    effect: u3, // nybble 4
+};
+
+const Sfx = struct {
+    flags: u8,
+    speed: u8,
+    loop_start: u8,
+    loop_end: u8,
+    notes: [32]SfxNote,
+};
+
+// this convert an hex to a nibble, which is half bytes (4 bit)
+fn hexToNibble(c: u8) u4 {
+    return switch (c) {
+        '0'...'9' => @as(u4, @intCast(c - '0')),
+        'a'...'f' => @as(u4, @intCast(c - 'a' + 10)),
+        'A'...'F' => @as(u4, @intCast(c - 'A' + 10)),
+        else => unreachable,
+    };
+}
+
+// build a single u8, shifting to the left the first char (tens)
+fn hexByte(a: u8, b: u8) u8 {
+    return (@as(u8, hexToNibble(a)) << 4) | @as(u8, hexToNibble(b));
+}
+
+fn parseNote(chars: []const u8) SfxNote {
+    const pitch = hexByte(chars[0], chars[1]);
+    const waveform = hexToNibble(chars[2]);
+    const volume = hexToNibble(chars[3]);
+    const effect = hexToNibble(chars[4]);
+
+    return .{
+        .pitch = @as(u8, pitch & 0x3F),
+        .waveform = waveform,
+        .volume = @as(u3, @intCast(volume & 0x7)),
+        .effect = @as(u3, @intCast(effect & 0x7)),
+    };
+}
+
+fn parseSfxLine(line: []const u8) Sfx {
+    const flags = hexByte(line[0], line[1]);
+    const speed = hexByte(line[2], line[3]);
+    const loop_start = hexByte(line[4], line[5]);
+    const loop_end = hexByte(line[6], line[7]);
+
+    var notes: [32]SfxNote = undefined;
+
+    var i: usize = 0;
+    var offset: usize = 8; // after header
+
+    while (i < 32) : (i += 1) {
+        const slice = line[offset .. offset + 5];
+        notes[i] = parseNote(slice);
+        offset += 5;
+    }
+
+    return .{
+        .flags = flags,
+        .speed = speed,
+        .loop_start = loop_start,
+        .loop_end = loop_end,
+        .notes = notes,
+    };
+}
+
 fn hex_to_rgb(index: u8) []const u8 {
     return switch (index) {
         '0' => "0 0 0",
@@ -203,5 +275,11 @@ pub fn main() !void {
         }
 
         std.debug.print("\n", .{});
+    }
+
+    // sfx section
+    // here's the stuff get a little bit complicated
+    for (sfx_section.items) |value| {
+        _ = parseSfxLine(value);
     }
 }
