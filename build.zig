@@ -34,6 +34,11 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
+    const sdl3 = b.dependency("sdl3", .{
+        .target = target,
+        .optimize = optimize,
+    });
+
     const exe = b.addExecutable(.{
         .name = "bacio_8",
         .root_module = b.createModule(.{
@@ -58,6 +63,7 @@ pub fn build(b: *std.Build) void {
                 // importing modules from different packages).
                 // .{ .name = "bacio_8", .module = mod },
                 .{ .name = "zlua", .module = lua_dep.module("zlua") },
+                .{ .name = "sdl3", .module = sdl3.module("sdl3") },
             },
         }),
     });
